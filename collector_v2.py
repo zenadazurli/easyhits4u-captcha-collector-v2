@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # collector_v2.py
-# Raccoglie captcha non risolti usando i cookie generati
 
 import os
 import time
@@ -34,10 +33,11 @@ class CaptchaCollectorV2:
     def get_cookies_from_supabase(self):
         """Legge i cookie dalla tabella account_cookies"""
         try:
-            result = self.supabase.table('account_cookies').select('name, sesids').execute()
+            result = self.supabase.table('account_cookies').select('account_name, sesids').execute()
             cookies = {}
             for row in result.data:
-                cookies[row['name']] = row['sesids']
+                if row.get('sesids'):
+                    cookies[row['account_name']] = row['sesids']
             self.log(f"📋 Letti {len(cookies)} cookie da Supabase")
             return cookies
         except Exception as e:
@@ -45,20 +45,16 @@ class CaptchaCollectorV2:
             return {}
     
     def download_captcha(self):
-        """Scarica il captcha dalla pagina surf"""
         try:
             surf_url = "https://www.easyhits4u.com/surf/"
             response = self.session.get(surf_url)
             
-            # Se il login è richiesto, il cookie non è valido
             if "logon" in response.url.lower() or "login" in response.url.lower():
                 return None, None, "cookie_invalido"
             
             patterns = [
                 r'src="([^"]+captcha[^"]+)"',
                 r'src="([^"]+Captcha[^"]+)"',
-                r'src="([^"]+verification[^"]+)"',
-                r'src="([^"]+image[^"]+\.png)"'
             ]
             
             captcha_url = None
@@ -83,7 +79,6 @@ class CaptchaCollectorV2:
             return None, None, "errore"
     
     def salva_su_supabase(self, account_name, img_bytes, is_math):
-        """Salva il captcha su Supabase"""
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S%f")
             prefix = "math" if is_math else "figure"
@@ -104,25 +99,13 @@ class CaptchaCollectorV2:
             self.log(f"Save error: {e}")
             return False
     
-    def submit_answer(self, answer):
-        """Invia la risposta del captcha"""
-        try:
-            submit_url = "https://www.easyhits4u.com/surf/check"
-            data = {"captcha_answer": answer}
-            response = self.session.post(submit_url, data=data)
-            return "success" in response.text.lower()
-        except:
-            return False
-    
     def run_account(self, account_name, sesids):
-        """Esegue surf per un account usando il cookie"""
         self.log(f"📧 Account: {account_name}")
         
-        # Imposta il cookie
         self.session.cookies.set('sesids', sesids)
         
         surf_count = 0
-        for i in range(8):  # 8 tentativi per account
+        for i in range(8):
             img_bytes, is_math, status = self.download_captcha()
             
             if status == "cookie_invalido":
@@ -151,7 +134,6 @@ class CaptchaCollectorV2:
         self.log("🚀 CAPTCHA COLLECTOR V2 - 40 NUOVI ACCOUNT")
         self.log("=" * 60)
         
-        # Leggi i cookie da Supabase
         cookies = self.get_cookies_from_supabase()
         
         if not cookies:
