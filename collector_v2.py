@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # collector_v2.py
 # Basato sul repository easyhits4u-surf-collector-main
-# USA SOLO I 40 NUOVI ACCOUNT (nessun account vecchio)
+# USA SOLO I 40 NUOVI ACCOUNT
 
 import os
 import sys
@@ -106,7 +106,7 @@ def centra_figura(image):
         return cv2.resize(image, (DIM, DIM))
     cnt = max(contours, key=cv2.contourArea)
     x, y, w, h = cv2.boundingRect(cnt)
-    crop = image[y:y+h, x:x+w)
+    crop = image[y:y+h, x:x+w]  # <--- CORRETTO!
     return cv2.resize(crop, (DIM, DIM))
 
 def estrai_descrittori(img):
@@ -179,7 +179,8 @@ def crop_safe(img, coords):
     y2 = max(0, min(h, y2))
     if x2 <= x1 or y2 <= y1:
         return None
-    return img[y1:y2, x1:x2]
+    crop = img[y1:y2, x1:x2]  # <--- CORRETTO!
+    return crop
 
 # ==================== COLLECTOR ====================
 class CaptchaCollectorV2:
@@ -260,13 +261,11 @@ class CaptchaCollectorV2:
             return False
     
     def risolvi_figure(self, urlid, qpic, picmap, img):
-        """Risolve captcha a figure (come nell'originale)"""
+        """Risolve captcha a figure"""
         self.log("   🖼️ Captcha a figure rilevato")
         
-        # Ritaglia le 5 immagini
         crops = [crop_safe(img, p.get("coords", "")) for p in picmap]
         
-        # Riconosci ogni figura
         labels = []
         for i, crop in enumerate(crops):
             if crop is not None and crop.size > 0:
@@ -277,7 +276,6 @@ class CaptchaCollectorV2:
                 labels.append(None)
                 self.log(f"      Figura {i+1}: errore")
         
-        # Cerca duplicati
         seen = {}
         chosen_idx = None
         for i, label in enumerate(labels):
@@ -310,7 +308,7 @@ class CaptchaCollectorV2:
         return None
     
     def surf_and_get_captcha(self):
-        """Esegue un ciclo di surf (come nell'originale)"""
+        """Esegue un ciclo di surf"""
         try:
             r = self.session.post(
                 "https://www.easyhits4u.com/surf/?ajax=1&try=1",
@@ -329,7 +327,6 @@ class CaptchaCollectorV2:
             if not urlid or not qpic:
                 return None, None, "nessun_captcha"
             
-            # Scarica l'immagine
             img_data = self.session.get(
                 f"https://www.easyhits4u.com/simg/{qpic}.jpg",
                 verify=False
@@ -349,7 +346,7 @@ class CaptchaCollectorV2:
             return None, str(e), "errore"
     
     def invia_risposta(self, urlid, word):
-        """Invia la risposta (come nell'originale)"""
+        """Invia la risposta"""
         try:
             url = f"https://www.easyhits4u.com/surf/?f=surf&urlid={urlid}&surftype=2&ajax=1&word={word}&screen_width=1024&screen_height=768"
             url += "&window_width=1024&window_height=643&top_width=1024&top_height=50"
@@ -362,15 +359,12 @@ class CaptchaCollectorV2:
             return None, str(e)
     
     def run_account(self, account_name, cookie_string):
-        """Esegue surf per un account usando il cookie completo"""
+        """Esegue surf per un account"""
         self.account_name = account_name
-        
-        # Imposta il cookie completo
         self.session.headers.update({"Cookie": cookie_string})
         
         self.log(f"📧 Account: {account_name}")
         
-        # Attiva la sessione di surf
         try:
             self.log(f"   🔄 Attivazione sessione surf...")
             self.session.get("https://www.easyhits4u.com/surf/", verify=False, timeout=10)
