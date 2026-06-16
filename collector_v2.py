@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # collector_v2.py
 # Basato sul repository easyhits4u-surf-collector-main
+# USA SOLO I 40 NUOVI ACCOUNT (nessun account vecchio)
 
 import os
 import sys
@@ -27,6 +28,20 @@ REQUEST_TIMEOUT = 15
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ SUPABASE_URL e SUPABASE_KEY devono essere impostate")
+
+# ==================== LISTA DEI 40 NUOVI ACCOUNT ====================
+NUOVI_ACCOUNT = [
+    'ucupamikowa', 'ubbmaad', 'unachizaadaa', 'uzofequ',
+    'ugaglchimulu', 'usfnejafi', 'ugaufkokagl', 'utuufvo',
+    'umufela', 'uzukimice', 'uvatulukofo', 'ugetrle',
+    'usfkugl', 'uzuculo', 'uxipgda', 'ulidazurzmu',
+    'uncglximo', 'ufezusavo', 'ulileaature', 'ulorenakino',
+    'uqulenazusa', 'ukaramu', 'uferalola', 'ummmarzsarm',
+    'udatrlefe', 'uaakiggzu', 'uzorzvu', 'uwanepgbo',
+    'udioodali', 'usadiadmobo', 'ulixire', 'udiadnczo',
+    'uzalesagg', 'upabbkafone', 'uramincadkr', 'uganakaeara',
+    'urerafokrne', 'ufiwakota', 'ukrfojudi', 'uornewafomo'
+]
 
 # ==================== VARIABILI GLOBALI ====================
 X_fast = None
@@ -91,7 +106,7 @@ def centra_figura(image):
         return cv2.resize(image, (DIM, DIM))
     cnt = max(contours, key=cv2.contourArea)
     x, y, w, h = cv2.boundingRect(cnt)
-    crop = image[y:y+h, x:x+w]
+    crop = image[y:y+h, x:x+w)
     return cv2.resize(crop, (DIM, DIM))
 
 def estrai_descrittori(img):
@@ -179,22 +194,22 @@ class CaptchaCollectorV2:
         print(f"[{timestamp}] {msg}", flush=True)
     
     def get_cookies_from_supabase(self):
-        """Legge i cookie dalla tabella account_cookies - usa cookie_string completo!"""
+        """Legge SOLO i cookie dei 40 nuovi account"""
         try:
-            # Legge cookie_string (divella_format) come nell'originale
             result = self.supabase.table('account_cookies')\
                 .select('account_name, cookie_string, sesids')\
+                .in_('account_name', NUOVI_ACCOUNT)\
                 .execute()
+            
             cookies = {}
             for row in result.data:
-                # Priorità a cookie_string (divella_format) se presente
                 cookie = row.get('cookie_string')
                 if not cookie and row.get('sesids'):
-                    # Se non c'è cookie_string, usa sesids (fallback)
                     cookie = f"sesids={row['sesids']}"
                 if cookie:
                     cookies[row['account_name']] = cookie
-            self.log(f"📋 Letti {len(cookies)} cookie da Supabase")
+            
+            self.log(f"📋 Letti {len(cookies)} cookie dei 40 nuovi account")
             return cookies
         except Exception as e:
             self.log(f"❌ Errore lettura cookie: {e}")
@@ -297,7 +312,6 @@ class CaptchaCollectorV2:
     def surf_and_get_captcha(self):
         """Esegue un ciclo di surf (come nell'originale)"""
         try:
-            # Come nell'autosurf originale
             r = self.session.post(
                 "https://www.easyhits4u.com/surf/?ajax=1&try=1",
                 verify=False, timeout=REQUEST_TIMEOUT
@@ -351,12 +365,12 @@ class CaptchaCollectorV2:
         """Esegue surf per un account usando il cookie completo"""
         self.account_name = account_name
         
-        # 🔑 IMPOSTA IL COOKIE COMPLETO (divella_format)
+        # Imposta il cookie completo
         self.session.headers.update({"Cookie": cookie_string})
         
         self.log(f"📧 Account: {account_name}")
         
-        # Attiva la sessione di surf come nell'originale
+        # Attiva la sessione di surf
         try:
             self.log(f"   🔄 Attivazione sessione surf...")
             self.session.get("https://www.easyhits4u.com/surf/", verify=False, timeout=10)
@@ -368,7 +382,7 @@ class CaptchaCollectorV2:
         MAX_ERRORI = 3
         captcha_counter = 0
         
-        for i in range(15):  # 15 tentativi
+        for i in range(15):
             result, error, status = self.surf_and_get_captcha()
             
             if status == "nessun_captcha":
@@ -390,7 +404,6 @@ class CaptchaCollectorV2:
             
             errori_consecutivi = 0
             
-            # Tipo di captcha
             if result['picmap'] is not None:
                 word = self.risolvi_figure(
                     result['urlid'],
@@ -404,13 +417,11 @@ class CaptchaCollectorV2:
                     result['surfses'],
                     result['img']
                 )
-                # Ferma account per matematico non risolto
                 return
             
             if word is None:
                 return
             
-            # Invia risposta
             response, status_invio = self.invia_risposta(result['urlid'], word)
             
             if response and response.get("warning") == "wrong_choice":
@@ -429,24 +440,22 @@ class CaptchaCollectorV2:
             self.stats['risolti'] += 1
             self.log(f"   ✅ OK #{captcha_counter} - word={word}")
             
-            # Pausa come nell'originale
             time.sleep(random.uniform(2, 4))
         
         self.log(f"   ✅ Completato: {captcha_counter} captcha risolti")
     
     def run(self):
         self.log("=" * 60)
-        self.log("🚀 CAPTCHA COLLECTOR V2 - BASATO SU AUTOSURF")
+        self.log("🚀 CAPTCHA COLLECTOR V2 - 40 NUOVI ACCOUNT")
         self.log("=" * 60)
         
-        # Carica dataset
         if not load_dataset_from_hf():
             self.log("❌ Impossibile proseguire senza dataset")
             return
         
         cookies = self.get_cookies_from_supabase()
         if not cookies:
-            self.log("❌ Nessun cookie trovato")
+            self.log("❌ Nessun cookie trovato per i 40 nuovi account")
             return
         
         self.log(f"📋 Cookie disponibili: {len(cookies)}")
