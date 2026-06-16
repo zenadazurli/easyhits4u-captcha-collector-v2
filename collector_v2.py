@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # collector_v2.py
-# Basato sul repository easyhits4u_autosurf originale
+# Basato sul repository easyhits4u-surf-collector-main
 
 import os
 import sys
@@ -24,7 +24,6 @@ BUCKET_NAME = "easyhits4u-captchas-v2"
 DATASET_REPO = "zenadazurli/easyhits4u-dataset"
 DIM = 64
 REQUEST_TIMEOUT = 15
-ERRORI_DIR = "errori"
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ SUPABASE_URL e SUPABASE_KEY devono essere impostate")
@@ -180,13 +179,21 @@ class CaptchaCollectorV2:
         print(f"[{timestamp}] {msg}", flush=True)
     
     def get_cookies_from_supabase(self):
-        """Legge i cookie dalla tabella account_cookies"""
+        """Legge i cookie dalla tabella account_cookies - usa cookie_string completo!"""
         try:
-            result = self.supabase.table('account_cookies').select('account_name, sesids').execute()
+            # Legge cookie_string (divella_format) come nell'originale
+            result = self.supabase.table('account_cookies')\
+                .select('account_name, cookie_string, sesids')\
+                .execute()
             cookies = {}
             for row in result.data:
-                if row.get('sesids'):
-                    cookies[row['account_name']] = row['sesids']
+                # Priorità a cookie_string (divella_format) se presente
+                cookie = row.get('cookie_string')
+                if not cookie and row.get('sesids'):
+                    # Se non c'è cookie_string, usa sesids (fallback)
+                    cookie = f"sesids={row['sesids']}"
+                if cookie:
+                    cookies[row['account_name']] = cookie
             self.log(f"📋 Letti {len(cookies)} cookie da Supabase")
             return cookies
         except Exception as e:
@@ -340,14 +347,16 @@ class CaptchaCollectorV2:
         except Exception as e:
             return None, str(e)
     
-    def run_account(self, account_name, sesids):
-        """Esegue surf per un account (come nell'originale)"""
+    def run_account(self, account_name, cookie_string):
+        """Esegue surf per un account usando il cookie completo"""
         self.account_name = account_name
-        self.session.cookies.set('sesids', sesids)
+        
+        # 🔑 IMPOSTA IL COOKIE COMPLETO (divella_format)
+        self.session.headers.update({"Cookie": cookie_string})
         
         self.log(f"📧 Account: {account_name}")
         
-        # 🔑 PASSO FONDAMENTALE: Attiva la sessione di surf
+        # Attiva la sessione di surf come nell'originale
         try:
             self.log(f"   🔄 Attivazione sessione surf...")
             self.session.get("https://www.easyhits4u.com/surf/", verify=False, timeout=10)
@@ -357,6 +366,7 @@ class CaptchaCollectorV2:
         
         errori_consecutivi = 0
         MAX_ERRORI = 3
+        captcha_counter = 0
         
         for i in range(15):  # 15 tentativi
             result, error, status = self.surf_and_get_captcha()
@@ -415,13 +425,14 @@ class CaptchaCollectorV2:
                 )
                 return
             
+            captcha_counter += 1
             self.stats['risolti'] += 1
-            self.log(f"   ✅ OK #{self.stats['risolti']} - word={word}")
+            self.log(f"   ✅ OK #{captcha_counter} - word={word}")
             
             # Pausa come nell'originale
             time.sleep(random.uniform(2, 4))
         
-        self.log(f"   ✅ Completato: {self.stats['risolti']} risolti")
+        self.log(f"   ✅ Completato: {captcha_counter} captcha risolti")
     
     def run(self):
         self.log("=" * 60)
@@ -440,9 +451,9 @@ class CaptchaCollectorV2:
         
         self.log(f"📋 Cookie disponibili: {len(cookies)}")
         
-        for account_name, sesids in cookies.items():
+        for account_name, cookie_string in cookies.items():
             self.stats = {'figure': 0, 'math': 0, 'errors': 0, 'surf': 0, 'risolti': 0}
-            self.run_account(account_name, sesids)
+            self.run_account(account_name, cookie_string)
             time.sleep(random.uniform(2, 5))
         
         self.log("=" * 60)
