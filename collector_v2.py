@@ -347,6 +347,14 @@ class CaptchaCollectorV2:
         
         self.log(f"📧 Account: {account_name}")
         
+        # 🔑 PASSO FONDAMENTALE: Attiva la sessione di surf
+        try:
+            self.log(f"   🔄 Attivazione sessione surf...")
+            self.session.get("https://www.easyhits4u.com/surf/", verify=False, timeout=10)
+            time.sleep(2)
+        except Exception as e:
+            self.log(f"   ⚠️ Errore attivazione surf: {e}")
+        
         errori_consecutivi = 0
         MAX_ERRORI = 3
         
