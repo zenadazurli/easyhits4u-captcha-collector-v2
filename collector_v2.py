@@ -110,7 +110,7 @@ def centra_figura(image):
         return cv2.resize(image, (DIM, DIM))
     cnt = max(contours, key=cv2.contourArea)
     x, y, w, h = cv2.boundingRect(cnt)
-    crop = image[y:y+h, x:x+w)
+    crop = image[y:y+h, x:x+w]   # <--- CORRETTO!
     return cv2.resize(crop, (DIM, DIM))
 
 def estrai_descrittori(img):
@@ -183,7 +183,7 @@ def crop_safe(img, coords):
     y2 = max(0, min(h, y2))
     if x2 <= x1 or y2 <= y1:
         return None
-    crop = img[y1:y2, x1:x2]
+    crop = img[y1:y2, x1:x2]   # <--- CORRETTO!
     return crop
 
 # ==================== SURF ACCOUNT (THREAD) ====================
