@@ -2,6 +2,7 @@
 # collector_v2.py
 # Basato sul repository easyhits4u-surf-collector-main
 # USA SOLO I 40 NUOVI ACCOUNT con MULTITHREADING
+# LOOP INFINITO PER OGNI ACCOUNT
 
 import os
 import sys
@@ -27,7 +28,7 @@ DATASET_REPO = "zenadazurli/easyhits4u-dataset"
 DIM = 64
 REQUEST_TIMEOUT = 15
 
-MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", 2))
+MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", 5))
 STAGGERED_START_DELAY = int(os.environ.get("STAGGERED_START_DELAY", 5))
 
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -110,7 +111,7 @@ def centra_figura(image):
         return cv2.resize(image, (DIM, DIM))
     cnt = max(contours, key=cv2.contourArea)
     x, y, w, h = cv2.boundingRect(cnt)
-    crop = image[y:y+h, x:x+w]
+    crop = image[y:y+h, x:x+w)
     return cv2.resize(crop, (DIM, DIM))
 
 def estrai_descrittori(img):
@@ -188,7 +189,7 @@ def crop_safe(img, coords):
 
 # ==================== SURF ACCOUNT (THREAD) ====================
 def surf_account(account_name, cookie_string, stats, supabase_client):
-    """Esegue surf per un account (thread)"""
+    """Esegue surf per un account (thread) con loop infinito"""
     session = requests.Session()
     session.headers.update({"Cookie": cookie_string})
     
@@ -203,10 +204,10 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
         log(f"[{account_name}] ⚠️ Errore attivazione surf: {e}")
     
     errori_consecutivi = 0
-    MAX_ERRORI = 3
+    MAX_ERRORI = 5
     captcha_counter = 0
     
-    for i in range(15):
+    while True:  # <-- LOOP INFINITO - si ferma solo per errore
         try:
             r = session.post(
                 "https://www.easyhits4u.com/surf/?ajax=1&try=1",
@@ -221,7 +222,7 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             surfses = data.get("surfses", {})
             urlid = surfses.get("urlid")
             qpic = surfses.get("qpic")
-            seconds = int(surfses.get("seconds", 20))  # <- LEGGI I SECOND!
+            seconds = int(surfses.get("seconds", 20))
             picmap = data.get("picmap")
             
             if not urlid or not qpic:
@@ -244,7 +245,7 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             
             if picmap is not None:
                 # CAPTCHA A FIGURE
-                log(f"[{account_name}] 🖼️ Captcha a figure rilevato")
+                # log(f"[{account_name}] 🖼️ Captcha a figure rilevato")  # commentato per log più pulito
                 
                 crops = [crop_safe(img, p.get("coords", "")) for p in picmap]
                 labels = []
@@ -268,20 +269,20 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
                 if chosen_idx is None:
                     log(f"[{account_name}] ❌ Nessun duplicato trovato")
                     salva_captcha(supabase_client, account_name, qpic, img, picmap, labels, "nessun_duplicato", urlid, stats)
-                    return
+                    return  # <-- FERMA L'ACCOUNT
                 
                 word = picmap[chosen_idx]["value"]
-                log(f"[{account_name}] ✅ Duplicato: figura {chosen_idx+1} -> word={word}")
+                # log(f"[{account_name}] ✅ Duplicato: figura {chosen_idx+1} -> word={word}")  # commentato
                 
-                # 🔑 PASSO FONDAMENTALE: Aspetta i secondi del captcha (come nell'originale!)
-                log(f"[{account_name}] ⏳ Attesa {seconds} secondi...")
+                # Aspetta i secondi del captcha
+                # log(f"[{account_name}] ⏳ Attesa {seconds} secondi...")  # commentato
                 time.sleep(seconds)
                 
             else:
                 # CAPTCHA MATEMATICO
-                log(f"[{account_name}] 🧮 Captcha matematico rilevato - SALVO PER ANALISI")
+                log(f"[{account_name}] 🧮 Captcha matematico rilevato - SALVO E FERMO")
                 salva_captcha(supabase_client, account_name, qpic, img, None, None, "matematico_non_risolto", urlid, stats)
-                return
+                return  # <-- FERMA L'ACCOUNT
             
             # Invia risposta
             url = f"https://www.easyhits4u.com/surf/?f=surf&urlid={urlid}&surftype=2&ajax=1&word={word}&screen_width=1024&screen_height=768"
@@ -292,17 +293,15 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             resp = session.get(url, verify=False, timeout=REQUEST_TIMEOUT)
             response_data = resp.json()
             
-            # 🔍 Log della risposta del server
-            log(f"[{account_name}] 📥 Risposta server: {response_data}")
-            
             if response_data.get("warning") == "wrong_choice":
                 log(f"[{account_name}] ❌ Risposta sbagliata: {word}")
                 salva_captcha(supabase_client, account_name, qpic, img, picmap, None, "wrong_choice", urlid, stats)
-                return
+                return  # <-- FERMA L'ACCOUNT
             
             captcha_counter += 1
             stats['risolti'] += 1
-            log(f"[{account_name}] ✅ OK #{captcha_counter} - word={word}")
+            if captcha_counter % 10 == 0:
+                log(f"[{account_name}] ✅ OK #{captcha_counter}")
             
             # Pausa casuale
             time.sleep(random.uniform(2, 4))
@@ -313,9 +312,7 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             if errori_consecutivi >= MAX_ERRORI:
                 log(f"[{account_name}] ❌ Troppi errori, fermo account")
                 return
-            time.sleep(3)
-    
-    log(f"[{account_name}] ✅ Completato: {captcha_counter} captcha risolti")
+            time.sleep(5)
 
 def salva_captcha(supabase_client, account_name, qpic, img, picmap, labels, motivo, urlid, stats):
     """Salva il captcha non risolto su Supabase"""
@@ -325,9 +322,11 @@ def salva_captcha(supabase_client, account_name, qpic, img, picmap, labels, moti
         if picmap is not None:
             prefix = "figure"
             table = "figure_captchas_v2"
+            stats['figure'] += 1
         else:
             prefix = "math"
             table = "math_captchas_v2"
+            stats['math'] += 1
         
         file_path = f"{prefix}/{timestamp}_{account_name}.png"
         _, buffer = cv2.imencode('.png', img)
@@ -350,12 +349,7 @@ def salva_captcha(supabase_client, account_name, qpic, img, picmap, labels, moti
         
         supabase_client.table(table).insert(data).execute()
         
-        if picmap is not None:
-            stats['figure'] += 1
-        else:
-            stats['math'] += 1
-        
-        log(f"[{account_name}] 💾 Captcha salvato")
+        log(f"[{account_name}] 💾 Captcha salvato ({motivo})")
     except Exception as e:
         log(f"[{account_name}] ❌ Errore salvataggio: {e}")
 
@@ -366,7 +360,7 @@ def log(msg):
 # ==================== MAIN ====================
 def main():
     log("=" * 60)
-    log("🚀 CAPTCHA COLLECTOR V2 - MULTITHREADING")
+    log("🚀 CAPTCHA COLLECTOR V2 - MULTITHREADING (LOOP INFINITO)")
     log("=" * 60)
     
     if not SUPABASE_KEY:
@@ -393,7 +387,7 @@ def main():
             if row.get('cookie_string'):
                 cookies[row['account_name']] = row['cookie_string']
         
-        log(f"📋 Letti {len(cookies)} cookie dei 40 nuovi account")
+        log(f"📋 Letti {len(cookies)} cookie dei {len(NUOVI_ACCOUNT)} nuovi account")
     except Exception as e:
         log(f"❌ Errore lettura cookie: {e}")
         return
@@ -405,7 +399,7 @@ def main():
     # Statistiche condivise
     stats = {'figure': 0, 'math': 0, 'errors': 0, 'surf': 0, 'risolti': 0}
     
-    # Avvia thread (multithreading come nell'originale)
+    # Avvia thread
     threads = []
     for account_name, cookie_string in cookies.items():
         while len(threads) >= MAX_CONCURRENT:
@@ -425,7 +419,7 @@ def main():
         t.join()
     
     log("=" * 60)
-    log("📊 STATISTICHE TOTALI")
+    log("📊 STATISTICHE FINALI")
     log(f"   Figure salvate: {stats['figure']}")
     log(f"   Matematici salvati: {stats['math']}")
     log(f"   Captcha risolti: {stats['risolti']}")
