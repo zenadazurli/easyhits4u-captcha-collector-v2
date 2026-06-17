@@ -111,7 +111,7 @@ def centra_figura(image):
         return cv2.resize(image, (DIM, DIM))
     cnt = max(contours, key=cv2.contourArea)
     x, y, w, h = cv2.boundingRect(cnt)
-    crop = image[y:y+h, x:x+w)
+    crop = image[y:y+h, x:x+w]   # <--- CORRETTO!
     return cv2.resize(crop, (DIM, DIM))
 
 def estrai_descrittori(img):
@@ -184,7 +184,7 @@ def crop_safe(img, coords):
     y2 = max(0, min(h, y2))
     if x2 <= x1 or y2 <= y1:
         return None
-    crop = img[y1:y2, x1:x2]
+    crop = img[y1:y2, x1:x2]   # <--- CORRETTO!
     return crop
 
 # ==================== SURF ACCOUNT (THREAD) ====================
@@ -207,7 +207,7 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
     MAX_ERRORI = 5
     captcha_counter = 0
     
-    while True:  # <-- LOOP INFINITO - si ferma solo per errore
+    while True:  # <-- LOOP INFINITO
         try:
             r = session.post(
                 "https://www.easyhits4u.com/surf/?ajax=1&try=1",
@@ -245,8 +245,6 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             
             if picmap is not None:
                 # CAPTCHA A FIGURE
-                # log(f"[{account_name}] 🖼️ Captcha a figure rilevato")  # commentato per log più pulito
-                
                 crops = [crop_safe(img, p.get("coords", "")) for p in picmap]
                 labels = []
                 for crop in crops:
@@ -269,20 +267,16 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
                 if chosen_idx is None:
                     log(f"[{account_name}] ❌ Nessun duplicato trovato")
                     salva_captcha(supabase_client, account_name, qpic, img, picmap, labels, "nessun_duplicato", urlid, stats)
-                    return  # <-- FERMA L'ACCOUNT
+                    return
                 
                 word = picmap[chosen_idx]["value"]
-                # log(f"[{account_name}] ✅ Duplicato: figura {chosen_idx+1} -> word={word}")  # commentato
-                
-                # Aspetta i secondi del captcha
-                # log(f"[{account_name}] ⏳ Attesa {seconds} secondi...")  # commentato
                 time.sleep(seconds)
                 
             else:
                 # CAPTCHA MATEMATICO
                 log(f"[{account_name}] 🧮 Captcha matematico rilevato - SALVO E FERMO")
                 salva_captcha(supabase_client, account_name, qpic, img, None, None, "matematico_non_risolto", urlid, stats)
-                return  # <-- FERMA L'ACCOUNT
+                return
             
             # Invia risposta
             url = f"https://www.easyhits4u.com/surf/?f=surf&urlid={urlid}&surftype=2&ajax=1&word={word}&screen_width=1024&screen_height=768"
@@ -296,14 +290,13 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             if response_data.get("warning") == "wrong_choice":
                 log(f"[{account_name}] ❌ Risposta sbagliata: {word}")
                 salva_captcha(supabase_client, account_name, qpic, img, picmap, None, "wrong_choice", urlid, stats)
-                return  # <-- FERMA L'ACCOUNT
+                return
             
             captcha_counter += 1
             stats['risolti'] += 1
             if captcha_counter % 10 == 0:
                 log(f"[{account_name}] ✅ OK #{captcha_counter}")
             
-            # Pausa casuale
             time.sleep(random.uniform(2, 4))
             
         except Exception as e:
