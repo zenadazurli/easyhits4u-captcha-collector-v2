@@ -27,8 +27,8 @@ DATASET_REPO = "zenadazurli/easyhits4u-dataset"
 DIM = 64
 REQUEST_TIMEOUT = 15
 
-MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", 5))
-STAGGERED_START_DELAY = int(os.environ.get("STAGGERED_START_DELAY", 3))
+MAX_CONCURRENT = int(os.environ.get("MAX_CONCURRENT", 2))
+STAGGERED_START_DELAY = int(os.environ.get("STAGGERED_START_DELAY", 5))
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise ValueError("❌ SUPABASE_URL e SUPABASE_KEY devono essere impostate")
@@ -110,7 +110,7 @@ def centra_figura(image):
         return cv2.resize(image, (DIM, DIM))
     cnt = max(contours, key=cv2.contourArea)
     x, y, w, h = cv2.boundingRect(cnt)
-    crop = image[y:y+h, x:x+w]   # <--- CORRETTO!
+    crop = image[y:y+h, x:x+w]
     return cv2.resize(crop, (DIM, DIM))
 
 def estrai_descrittori(img):
@@ -183,7 +183,7 @@ def crop_safe(img, coords):
     y2 = max(0, min(h, y2))
     if x2 <= x1 or y2 <= y1:
         return None
-    crop = img[y1:y2, x1:x2]   # <--- CORRETTO!
+    crop = img[y1:y2, x1:x2]
     return crop
 
 # ==================== SURF ACCOUNT (THREAD) ====================
@@ -221,6 +221,7 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             surfses = data.get("surfses", {})
             urlid = surfses.get("urlid")
             qpic = surfses.get("qpic")
+            seconds = int(surfses.get("seconds", 20))  # <- LEGGI I SECOND!
             picmap = data.get("picmap")
             
             if not urlid or not qpic:
@@ -266,12 +267,16 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
                 
                 if chosen_idx is None:
                     log(f"[{account_name}] ❌ Nessun duplicato trovato")
-                    # Salva il captcha non risolto
                     salva_captcha(supabase_client, account_name, qpic, img, picmap, labels, "nessun_duplicato", urlid, stats)
                     return
                 
                 word = picmap[chosen_idx]["value"]
                 log(f"[{account_name}] ✅ Duplicato: figura {chosen_idx+1} -> word={word}")
+                
+                # 🔑 PASSO FONDAMENTALE: Aspetta i secondi del captcha (come nell'originale!)
+                log(f"[{account_name}] ⏳ Attesa {seconds} secondi...")
+                time.sleep(seconds)
+                
             else:
                 # CAPTCHA MATEMATICO
                 log(f"[{account_name}] 🧮 Captcha matematico rilevato - SALVO PER ANALISI")
@@ -286,6 +291,9 @@ def surf_account(account_name, cookie_string, stats, supabase_client):
             
             resp = session.get(url, verify=False, timeout=REQUEST_TIMEOUT)
             response_data = resp.json()
+            
+            # 🔍 Log della risposta del server
+            log(f"[{account_name}] 📥 Risposta server: {response_data}")
             
             if response_data.get("warning") == "wrong_choice":
                 log(f"[{account_name}] ❌ Risposta sbagliata: {word}")
